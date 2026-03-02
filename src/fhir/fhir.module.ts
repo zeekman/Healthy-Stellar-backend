@@ -16,12 +16,42 @@ import { BulkExportJob } from './entities/bulk-export-job.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Patient, MedicalRecord, MedicalRecordConsent, MedicalHistory, BulkExportJob]),
+    TypeOrmModule.forFeature([
+      Patient,
+      MedicalRecord,
+      MedicalRecordConsent,
+      MedicalHistory,
+      BulkExportJob,
+    ]),
     BullModule.registerQueue({ name: 'fhir-bulk-export' }),
     ScheduleModule.forRoot(),
   ],
   controllers: [FhirController],
   providers: [FhirService, BulkExportService, FhirMapperService, BulkExportProcessor, BulkExportCleanupTask],
   exports: [FhirService, BulkExportService, FhirMapperService],
+  providers: [FhirService, BulkExportService, BulkExportProcessor, BulkExportCleanupTask],
+  exports: [FhirService, BulkExportService],
+import { FhirService } from './services/fhir.service';
+import { FhirValidatorService } from './services/fhir-validator.service';
+import { FhirMapperService } from './mappers/fhir-mapper.service';
+import { PatientMapper } from './mappers/patient.mapper';
+import { DocumentReferenceMapper } from './mappers/document-reference.mapper';
+import { ProvenanceMapper } from './mappers/provenance.mapper';
+import { ConsentMapper } from './mappers/consent.mapper';
+import { FhirController } from './controllers/fhir.controller';
+
+@Module({
+  controllers: [FhirController],
+  providers: [
+    FhirService,
+    FhirValidatorService,
+    FhirMapperService,
+    PatientMapper,
+    DocumentReferenceMapper,
+    ProvenanceMapper,
+    ConsentMapper,
+  ],
+  exports: [FhirService, FhirMapperService],
+ main
 })
 export class FhirModule {}

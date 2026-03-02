@@ -1,13 +1,29 @@
 import './tracing'; // Initialize tracing before any other imports
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { NestFactory, Reflector } from '@nestjs/core';
+import { VersioningType, VERSION_NEUTRAL } from '@nestjs/common';
+import { I18nValidationPipe, I18nValidationExceptionFilter } from 'nestjs-i18n';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import helmet from 'helmet';
+import { DeprecationInterceptor } from './common/interceptors/deprecation.interceptor';
+import { Logger } from 'nestjs-pino';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  // Use Pino logger
+  app.useLogger(app.get(Logger));
+  app.flushLogs();
+
+  // Enable URI-based API Versioning
+  app.enableVersioning({
+    type: VersioningType.URI,
+    // Set default version to 1, and fall back to VERSION_NEUTRAL for unversioned routes.
+    defaultVersion: ['1', VERSION_NEUTRAL],
+  });
 
   // Security Headers - Helmet Configuration
   app.use(
@@ -58,9 +74,12 @@ async function bootstrap() {
     exposedHeaders: ['X-Total-Count', 'X-Page-Count', 'X-Trace-ID'],
     maxAge: 3600,
   });
-  app.useGlobalFilters(new HttpExceptionFilter());
+
+  app.useGlobalInterceptors(new DeprecationInterceptor(app.get(Reflector)));
+
+  app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalPipes(
-    new ValidationPipe({
+    new I18nValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
@@ -70,7 +89,8 @@ async function bootstrap() {
   // Medical-Grade API Documentation
   const config = new DocumentBuilder()
     .setTitle('Medical Records Management API')
-    .setDescription(`
+    .setDescription(
+      `
       **HIPAA-Compliant Healthcare Management System**
       
       ⚠️ **MEDICAL DATA PRIVACY NOTICE**
@@ -86,16 +106,20 @@ async function bootstrap() {
       - Medical data is anonymized in examples
       - Audit logging for all operations
       - End-to-end encryption
-    `)
+    `,
+    )
     .setVersion('1.0.0')
     .setContact('Medical IT Team', 'https://medical-system.com', 'medical-it@hospital.com')
     .setLicense('Medical License', 'https://medical-system.com/license')
-    .addBearerAuth({
-      type: 'http',
-      scheme: 'bearer',
-      bearerFormat: 'JWT',
-      description: 'Medical staff authentication token'
-    }, 'medical-auth')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Medical staff authentication token',
+      },
+      'medical-auth',
+    )
     .addTag('Medical Records', 'Patient medical record management')
     .addTag('Clinical Templates', 'Standardized clinical documentation')
     .addTag('Consent Management', 'Patient consent and data sharing')
@@ -113,7 +137,7 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  
+
   // Custom CSS for medical branding
   const customCss = `
     .swagger-ui .topbar { background-color: #2c5aa0; }
@@ -137,14 +161,16 @@ async function bootstrap() {
       displayRequestDuration: true,
       filter: true,
       showExtensions: true,
-      showCommonExtensions: true
-    }
+      showCommonExtensions: true,
+    },
   });
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  console.log(`🏥 Medical System API: http://localhost:${port}`);
-  console.log(`📚 API Documentation: http://localhost:${port}/api`);
+  
+  const logger = app.get(Logger);
+  logger.log(`🏥 Medical System API: http://localhost:${port}`);
+  logger.log(`📚 API Documentation: http://localhost:${port}/api`);
 }
 
 bootstrap();

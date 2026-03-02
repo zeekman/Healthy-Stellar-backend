@@ -1,4 +1,5 @@
 import { Controller, Post, Get, UseGuards, Body, Req, BadRequestException } from '@nestjs/common';
+import { I18nContext } from 'nestjs-i18n';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Request } from 'express';
 import { MfaService } from '../services/mfa.service';
@@ -79,7 +80,8 @@ export class MfaController {
         success: true,
         message: result.message,
         backupCodes: result.backupCodes,
-        warning: 'Save backup codes in a secure location. You can use them to access your account if you lose access to your authenticator.',
+        warning:
+          'Save backup codes in a secure location. You can use them to access your account if you lose access to your authenticator.',
       };
     } catch (error) {
       await this.auditService.logAuthenticationEvent(AuditAction.MFA_VERIFIED, false, {
@@ -103,7 +105,7 @@ export class MfaController {
   async verifyCode(@Body() mfaVerifyDto: MfaVerifyDto, @Req() req: Request): Promise<any> {
     const user = req.user as JwtPayload;
     if (!/^\d{6}$/.test(mfaVerifyDto.code)) {
-      throw new BadRequestException('Invalid code format');
+      throw new BadRequestException(I18nContext.current()?.t('errors.INVALID_CODE_FORMAT') || 'Invalid code format');
     }
 
     const isValid = await this.mfaService.verifyMfaCode(user.userId, mfaVerifyDto.code);
@@ -115,7 +117,7 @@ export class MfaController {
         ipAddress: this.getIpAddress(req),
         severity: 'MEDIUM',
       });
-      throw new BadRequestException('Invalid MFA code');
+      throw new BadRequestException(I18nContext.current()?.t('errors.INVALID_MFA_CODE') || 'Invalid MFA code');
     }
 
     return { success: true, message: 'MFA code verified' };
@@ -154,10 +156,13 @@ export class MfaController {
   ): Promise<any> {
     const user = req.user as JwtPayload;
     // Verify with MFA code first
-    const isValid = await this.mfaService.verifyMfaCode(user.userId, backupCodesDto.verificationCode);
+    const isValid = await this.mfaService.verifyMfaCode(
+      user.userId,
+      backupCodesDto.verificationCode,
+    );
 
     if (!isValid) {
-      throw new BadRequestException('Invalid MFA code');
+      throw new BadRequestException(I18nContext.current()?.t('errors.INVALID_MFA_CODE') || 'Invalid MFA code');
     }
 
     const newCodes = await this.mfaService.generateNewBackupCodes(user.userId);
@@ -186,10 +191,13 @@ export class MfaController {
   async disableMfa(@Body() backupCodesDto: BackupCodesDto, @Req() req: Request): Promise<any> {
     const user = req.user as JwtPayload;
     // Verify with MFA code first
-    const isValid = await this.mfaService.verifyMfaCode(user.userId, backupCodesDto.verificationCode);
+    const isValid = await this.mfaService.verifyMfaCode(
+      user.userId,
+      backupCodesDto.verificationCode,
+    );
 
     if (!isValid) {
-      throw new BadRequestException('Invalid MFA code');
+      throw new BadRequestException(I18nContext.current()?.t('errors.INVALID_MFA_CODE') || 'Invalid MFA code');
     }
 
     await this.mfaService.disableMfa(user.userId);

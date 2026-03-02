@@ -39,12 +39,12 @@ export class TenantConfigController {
   async getTenantConfig(@Param('id', ParseUUIDPipe) tenantId: string, @Request() req) {
     // Validate tenant access (prevent IDOR)
     this.validateTenantAccess(req.user, tenantId);
-    
+
     this.logger.log(`Fetching config for tenant: ${this.sanitizeTenantId(tenantId)}`);
-    
+
     try {
       const configs = await this.tenantConfigService.getAllForTenant(tenantId);
-      
+
       return {
         tenantId,
         configs: configs.map((config) => ({
@@ -59,7 +59,7 @@ export class TenantConfigController {
     } catch (error) {
       // Generic error message to prevent information disclosure
       this.logger.error(`Error fetching tenant config: ${error.message}`);
-      throw new NotFoundException('Configuration not found');
+      throw new NotFoundException(I18nContext.current()?.t('errors.CONFIGURATION_NOT_FOUND') || 'Configuration not found');
     }
   }
 
@@ -76,12 +76,12 @@ export class TenantConfigController {
   ) {
     this.validateTenantAccess(req.user, tenantId);
     this.validateConfigKey(key);
-    
+
     this.logger.log(`Fetching config key "${key}" for tenant: ${this.sanitizeTenantId(tenantId)}`);
-    
+
     try {
       const value = await this.tenantConfigService.get(tenantId, key);
-      
+
       return {
         tenantId,
         key,
@@ -89,7 +89,7 @@ export class TenantConfigController {
       };
     } catch (error) {
       this.logger.error(`Error fetching config key: ${error.message}`);
-      throw new NotFoundException('Configuration not found');
+      throw new NotFoundException(I18nContext.current()?.t('errors.CONFIGURATION_NOT_FOUND') || 'Configuration not found');
     }
   }
 
@@ -108,9 +108,9 @@ export class TenantConfigController {
   ) {
     this.validateTenantAccess(req.user, tenantId);
     this.validateConfigKey(updateDto.key);
-    
+
     const userId = req.user?.userId || req.user?.id;
-    
+
     this.logger.log(
       `Updating config for tenant ${this.sanitizeTenantId(tenantId)}: ${updateDto.key}`,
     );
@@ -138,7 +138,7 @@ export class TenantConfigController {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new BadRequestException('Failed to update configuration');
+      throw new BadRequestException(I18nContext.current()?.t('errors.FAILED_TO_UPDATE_CONFIGURATION') || 'Failed to update configuration');
     }
   }
 
@@ -156,17 +156,17 @@ export class TenantConfigController {
     @Request() req,
   ) {
     this.validateTenantAccess(req.user, tenantId);
-    
+
     // Validate all keys before processing
-    bulkUpdateDto.configs.forEach(config => this.validateConfigKey(config.key));
-    
+    bulkUpdateDto.configs.forEach((config) => this.validateConfigKey(config.key));
+
     // Limit bulk update size
     if (bulkUpdateDto.configs.length > 50) {
-      throw new BadRequestException('Bulk update limited to 50 configurations at once');
+      throw new BadRequestException(I18nContext.current()?.t('errors.BULK_UPDATE_LIMITED_TO_50_CONFIGURATIONS_AT_ONCE') || 'Bulk update limited to 50 configurations at once');
     }
-    
+
     const userId = req.user?.userId || req.user?.id;
-    
+
     this.logger.log(
       `Bulk updating ${bulkUpdateDto.configs.length} configs for tenant ${this.sanitizeTenantId(tenantId)}`,
     );
@@ -190,7 +190,7 @@ export class TenantConfigController {
       };
     } catch (error) {
       this.logger.error(`Error in bulk update: ${error.message}`);
-      throw new BadRequestException('Failed to update configurations');
+      throw new BadRequestException(I18nContext.current()?.t('errors.FAILED_TO_UPDATE_CONFIGURATIONS') || 'Failed to update configurations');
     }
   }
 
@@ -209,11 +209,11 @@ export class TenantConfigController {
   ) {
     this.validateTenantAccess(req.user, tenantId);
     this.validateConfigKey(key);
-    
+
     const userId = req.user?.userId || req.user?.id;
-    
+
     this.logger.log(`Deleting config key "${key}" for tenant: ${this.sanitizeTenantId(tenantId)}`);
-    
+
     try {
       await this.tenantConfigService.delete(tenantId, key, userId);
 
@@ -224,7 +224,7 @@ export class TenantConfigController {
       };
     } catch (error) {
       this.logger.error(`Error deleting config: ${error.message}`);
-      throw new NotFoundException('Configuration not found');
+      throw new NotFoundException(I18nContext.current()?.t('errors.CONFIGURATION_NOT_FOUND') || 'Configuration not found');
     }
   }
 
@@ -241,14 +241,13 @@ export class TenantConfigController {
   ) {
     this.validateTenantAccess(req.user, tenantId);
     this.validateConfigKey(featureKey);
-    
-    this.logger.log(`Checking feature "${featureKey}" for tenant: ${this.sanitizeTenantId(tenantId)}`);
-    
+
+    this.logger.log(
+      `Checking feature "${featureKey}" for tenant: ${this.sanitizeTenantId(tenantId)}`,
+    );
+
     try {
-      const isEnabled = await this.tenantConfigService.isFeatureEnabled(
-        tenantId,
-        featureKey,
-      );
+      const isEnabled = await this.tenantConfigService.isFeatureEnabled(tenantId, featureKey);
 
       return {
         tenantId,
@@ -257,7 +256,7 @@ export class TenantConfigController {
       };
     } catch (error) {
       this.logger.error(`Error checking feature: ${error.message}`);
-      throw new NotFoundException('Feature not found');
+      throw new NotFoundException(I18nContext.current()?.t('errors.FEATURE_NOT_FOUND') || 'Feature not found');
     }
   }
 
@@ -269,13 +268,13 @@ export class TenantConfigController {
     // TODO: Implement proper tenant isolation
     // For now, only admins can access any tenant
     // In production, check if user belongs to the tenant's organization
-    
+
     if (!user) {
-      throw new BadRequestException('User not authenticated');
+      throw new BadRequestException(I18nContext.current()?.t('errors.USER_NOT_AUTHENTICATED') || 'User not authenticated');
     }
 
     // Example: if (user.tenantId && user.tenantId !== tenantId) {
-    //   throw new ForbiddenException('Access denied to this tenant');
+    //   throw new ForbiddenException(I18nContext.current()?.t('errors.ACCESS_DENIED_TO_THIS_TENANT') || 'Access denied to this tenant');
     // }
   }
 
@@ -284,17 +283,17 @@ export class TenantConfigController {
    */
   private validateConfigKey(key: string): void {
     if (!key || typeof key !== 'string') {
-      throw new BadRequestException('Invalid configuration key');
+      throw new BadRequestException(I18nContext.current()?.t('errors.INVALID_CONFIGURATION_KEY') || 'Invalid configuration key');
     }
 
     // Only allow alphanumeric, underscore, and dash
     if (!/^[a-zA-Z0-9_-]+$/.test(key)) {
-      throw new BadRequestException('Invalid configuration key format');
+      throw new BadRequestException(I18nContext.current()?.t('errors.INVALID_CONFIGURATION_KEY_FORMAT') || 'Invalid configuration key format');
     }
 
     // Limit key length
     if (key.length > 255) {
-      throw new BadRequestException('Configuration key too long');
+      throw new BadRequestException(I18nContext.current()?.t('errors.CONFIGURATION_KEY_TOO_LONG') || 'Configuration key too long');
     }
   }
 

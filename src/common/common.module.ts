@@ -27,6 +27,13 @@ import { RedisLockService } from './utils/redis-lock.service';
     RedisLockService,
   ],
   exports: [AuditLogService, DataEncryptionService, TracingService, AuditSubscriber, AuditContextGuard, RedisLockService],
+  exports: [
+    AuditLogService,
+    DataEncryptionService,
+    AuditSubscriber,
+    AuditContextGuard,
+    RedisLockService,
+  ],
 })
 export class CommonModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

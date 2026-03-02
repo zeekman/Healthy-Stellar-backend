@@ -2,6 +2,12 @@ import { APP_FILTER, APP_GUARD, APP_PIPE, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Module } from '@nestjs/common';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ConfigModule } from '@nestjs/config';
+import { Module } from '@nestjs/common';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
@@ -17,19 +23,45 @@ import { PharmacyModule } from './pharmacy/pharmacy.module';
 import { InfectionControlModule } from './infection-control/infection-control.module';
 import { EmergencyOperationsModule } from './emergency-operations/emergency-operations.module';
 import { AccessControlModule } from './access-control/access-control.module';
-import { ReportsModule } from './reports/reports.module';
 import { TenantModule } from './tenant/tenant.module';
+import { I18nModule, AcceptLanguageResolver } from 'nestjshelp me solve this fronted issue as a single resource with this #50 Engagement Rewards UI/2
+Repo Avatar hman38705/socialflow-ai-dashboard
+
+Descriptions:
+##issue 108.2:-i18n';
+import * as path from 'path';
+import { FhirModule } from './fhir/fhir.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { EmergencyOperationsModule } from './emergency-operations/emergency-operations.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { QueueModule } from './queues/queue.module';
+import { StellarModule } from './stellar/stellar.module';
 import { DatabaseConfig } from './config/database.config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { HealthController } from './health.controller';
+import { HealthModule } from './health/health.module';
 import { ValidationModule } from './common/validation/validation.module';
 import { MedicalEmergencyErrorFilter } from './common/errors/medical-emergency-error.filter';
 import { MedicalDataValidationPipe } from './common/validation/medical-data.validator.pipe';
-import { NotificationsModule } from './notifications/notifications.module';
-import { QueueModule } from './queues/queue.module';
 import { TenantConfigModule } from './tenant-config/tenant-config.module';
 import { TracingInterceptor } from './common/interceptors/tracing.interceptor';
+import { GdprModule } from './gdpr/gdpr.module';
+import { TenantInterceptor } from './tenant/interceptors/tenant.interceptor';
+import { JobsModule } from './jobs/jobs.module';
+import { AuditModule } from './common/audit/audit.module';
+import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
+import { ThrottlerConfigService } from './common/throttler/throttler-config.service';
+import { I18nAppModule } from './i18n/i18n.module';
+import { I18nExceptionFilter } from './i18n/filters/i18n-exception.filter';
+import { CircuitBreakerModule } from './common/circuit-breaker/chelp me solve this fronted issue as a single resource with this #50 Engagement Rewards UI/2
+Repo Avatar hman38705/socialflow-ai-dashboard
+
+Descriptions:
+##issue 108.2:ircuit-breaker.module';
+import { CircuitBreakerExceptionFilter } from './common/circuit-breaker/filters/circuit-breaker-exception.filter';
+import { MetricsModule } from './metrics/metrics.module';
+import { LoggerModule } from './common/logger/logger.module';
+import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
 
 const hasBearerAuthUser = (req: any): boolean => {
   const authHeader = req?.headers?.authorization;
@@ -52,7 +84,10 @@ const hasBearerAuthUser = (req: any): boolean => {
   }
 
   try {
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<string, any>;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<
+      string,
+      any
+    >;
     return Boolean(payload?.userId);
   } catch {
     return false;
@@ -76,7 +111,10 @@ const getUserTrackerFromRequest = (req: any): string => {
   }
 
   try {
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<string, any>;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<
+      string,
+      any
+    >;
     if (payload?.userId) {
       return `user:${payload.userId}`;
     }
@@ -90,13 +128,10 @@ const getUserTrackerFromRequest = (req: any): string => {
 
   return req?.ip || 'unknown-ip';
 };
-import { TenantInterceptor } from './tenant/interceptors/tenant.interceptor';
-import { AuditLogEntity } from './common/audit/audit-log.entity';
-import { JobsModule } from './jobs/jobs.module';
-import { AuditModule } from './common/audit/audit.module';
 
 @Module({
   imports: [
+    LoggerModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
@@ -105,16 +140,24 @@ import { AuditModule } from './common/audit/audit.module';
     TypeOrmModule.forRootAsync({
       useClass: DatabaseConfig,
     }),
-    // Rate limiting with Redis-backed storage
     ScheduleModule.forRoot(),
-    // Rate limiting and throttling for security
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       useClass: ThrottlerConfigService,
     }),
+    CircuitBreakerModule,
+    I18nModule.forRoot({
+      fallbackLanguage: 'en',
+      loaderOptions: {
+        path: path.join(__dirname, '/i18n/'),
+        watch: true,
+      },
+      resolvers: [AcceptLanguageResolver],
+    }),
     // Application modules
     TenantModule,
     CommonModule,
+    I18nAppModule,
     AuthModule,
     BillingModule,
     MedicalRecordsModule,
@@ -127,6 +170,8 @@ import { AuditModule } from './common/audit/audit.module';
     EmergencyOperationsModule,
     ValidationModule,
     InfectionControlModule,
+    HealthModule,
+    MetricsModule,
     NotificationsModule,
     QueueModule,
     FhirModule,
@@ -134,10 +179,12 @@ import { AuditModule } from './common/audit/audit.module';
     JobsModule,
     StellarModule,
     AuditModule,
-    ReportsModule,
     TenantConfigModule,
+    FhirModule,
+    AnalyticsModule,
+    GdprModule,
   ],
-  controllers: [AppController, HealthController],
+  controllers: [AppController],
   providers: [
     AppService,
     {
@@ -147,10 +194,19 @@ import { AuditModule } from './common/audit/audit.module';
     {
       provide: APP_INTERCEPTOR,
       useClass: TenantInterceptor
+      useClass: TenantInterceptor,
     },
     {
       provide: APP_FILTER,
       useClass: MedicalEmergencyErrorFilter,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: CircuitBreakerExceptionFilter,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: I18nExceptionFilter,
     },
     {
       provide: APP_PIPE,
@@ -162,4 +218,8 @@ import { AuditModule } from './common/audit/audit.module';
     },
   ],
 })
-export class AppModule { }
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestContextMiddleware).forRoutes('*');
+  }
+}

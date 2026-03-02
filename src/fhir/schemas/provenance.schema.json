@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["resourceType", "id", "target", "recorded"],
+  "properties": {
+    "resourceType": {
+      "type": "string",
+      "const": "Provenance"
+    },
+    "id": {
+      "type": "string"
+    },
+    "target": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "reference": { "type": "string" }
+        }
+      }
+    },
+    "recorded": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "agent": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "who": {
+            "type": "object",
+            "properties": {
+              "reference": { "type": "string" },
+              "display": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "activity": {
+      "type": "object",
+      "properties": {
+        "coding": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "system": { "type": "string" },
+              "code": { "type": "string" },
+              "display": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "reason": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" }
+        }
+      }
+    }
+  }
+}

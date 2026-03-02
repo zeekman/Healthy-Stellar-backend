@@ -66,6 +66,23 @@ export class StellarTransactionProcessor extends WorkerHost {
         }
       });
     });
+    this.logger.log(`Processing ${operationType} job ${job.id} (correlation: ${correlationId})`);
+
+    try {
+      switch (operationType) {
+        case JOB_TYPES.ANCHOR_RECORD:
+          return await this.handleAnchorRecord(params, initiatedBy);
+        case JOB_TYPES.GRANT_ACCESS:
+          return await this.handleGrantAccess(params, initiatedBy);
+        case JOB_TYPES.REVOKE_ACCESS:
+          return await this.handleRevokeAccess(params, initiatedBy);
+        default:
+          throw new Error(`Unknown operation type: ${operationType}`);
+      }
+    } catch (error) {
+      this.logger.error(`Job ${job.id} failed: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   private async handleAnchorRecord(params: any, initiatedBy: string) {

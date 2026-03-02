@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, FindOptionsWhere, Between } from 'typeorm';
 import { Record } from '../entities/record.entity';
 import { CreateRecordDto } from '../dto/create-record.dto';
+import { PaginationQueryDto } from '../dto/pagination-query.dto';
+import { PaginatedRecordsResponseDto, PaginationMeta } from '../dto/paginated-response.dto';
 import { IpfsService } from './ipfs.service';
 import { StellarService } from './stellar.service';
+import { AccessControlService } from '../../access-control/services/access-control.service';
+import { AuditLogService } from '../../common/services/audit-log.service';
 
 @Injectable()
 export class RecordsService {
@@ -13,6 +17,9 @@ export class RecordsService {
     private recordRepository: Repository<Record>,
     private ipfsService: IpfsService,
     private stellarService: StellarService,
+    @Inject(forwardRef(() => AccessControlService))
+    private accessControlService: AccessControlService,
+    private auditLogService: AuditLogService,
   ) {}
 
   async uploadRecord(
@@ -20,10 +27,7 @@ export class RecordsService {
     encryptedBuffer: Buffer,
   ): Promise<{ recordId: string; cid: string; stellarTxHash: string }> {
     const cid = await this.ipfsService.upload(encryptedBuffer);
-    const stellarTxHash = await this.stellarService.anchorCid(
-      dto.patientId,
-      cid,
-    );
+    const stellarTxHash = await this.stellarService.anchorCid(dto.patientId, cid);
 
     const record = this.recordRepository.create({
       patientId: dto.patientId,
@@ -40,5 +44,98 @@ export class RecordsService {
       cid: savedRecord.cid,
       stellarTxHash: savedRecord.stellarTxHash,
     };
+  }
+
+  async findAll(query: PaginationQueryDto): Promise<PaginatedRecordsResponseDto> {
+    const {
+      page = 1,
+      limit = 20,
+      recordType,
+      fromDate,
+      toDate,
+      sortBy = 'createdAt',
+      order = 'desc',
+      patientId,
+    } = query;
+
+    // Build where clause
+    const where: FindOptionsWhere<Record> = {};
+
+    if (recordType) {
+      where.recordType = recordType;
+    }
+
+    if (patientId) {
+      where.patientId = patientId;
+    }
+
+    if (fromDate && toDate) {
+      where.createdAt = Between(new Date(fromDate), new Date(toDate));
+    } else if (fromDate) {
+      where.createdAt = Between(new Date(fromDate), new Date());
+    } else if (toDate) {
+      where.createdAt = Between(new Date(0), new Date(toDate));
+    }
+
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+
+    // Execute query
+    const [data, total] = await this.recordRepository.findAndCount({
+      where,
+      order: {
+        [sortBy]: order.toUpperCase(),
+      },
+      take: limit,
+      skip,
+    });
+
+    // Calculate metadata
+    const totalPages = Math.ceil(total / limit);
+    const hasNextPage = page < totalPages;
+    const hasPreviousPage = page > 1;
+
+    const meta: PaginationMeta = {
+      total,
+      page,
+      limit,
+      totalPages,
+      hasNextPage,
+      hasPreviousPage,
+    };
+
+    return {
+      data,
+      meta,
+    };
+  }
+
+  async findOne(id: string, requesterId?: string): Promise<Record> {
+    const record = await this.recordRepository.findOne({ where: { id } });
+    
+    if (record && requesterId) {
+      const emergencyGrant = await this.accessControlService.findActiveEmergencyGrant(
+        record.patientId,
+        requesterId,
+        id,
+      );
+
+      if (emergencyGrant) {
+        await this.auditLogService.create({
+          operation: 'EMERGENCY_ACCESS',
+          entityType: 'records',
+          entityId: id,
+          userId: requesterId,
+          status: 'success',
+          newValues: {
+            patientId: record.patientId,
+            grantId: emergencyGrant.id,
+            recordId: id,
+          },
+        });
+      }
+    }
+    
+    return record;
   }
 }

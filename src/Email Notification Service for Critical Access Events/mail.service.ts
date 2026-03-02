@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
+import { CircuitBreakerService } from '../common/circuit-breaker/circuit-breaker.service';
 
 export interface Patient {
   id: string;
@@ -41,6 +42,7 @@ export class MailService {
   constructor(
     private readonly mailerService: MailerService,
     private readonly configService: ConfigService,
+    private readonly circuitBreaker: CircuitBreakerService,
   ) {
     this.isTestEnv = configService.get('NODE_ENV') === 'test';
     this.appUrl = configService.get('APP_URL', 'http://localhost:3000');
@@ -66,32 +68,36 @@ export class MailService {
     patient: Patient,
     grantee: Provider,
     record: MedicalRecord,
+    language: string = 'en'
   ): Promise<void> {
-    const template = 'access-granted/access-granted';
+    const template = `access-granted/access-granted.${language}`;
     const subject = `Access Granted: ${grantee.name} can now view your records`;
 
     if (this.isTestEnv) {
-      this.logger.log(
-        `[TEST] Would send '${subject}' to ${patient.email}`,
-        { patient, grantee, record },
-      );
+      this.logger.log(`[TEST] Would send '${subject}' to ${patient.email}`, {
+        patient,
+        grantee,
+        record,
+      });
       return;
     }
 
-    await this.mailerService.sendMail({
-      to: patient.email,
-      subject,
-      template,
-      context: {
-        patientName: patient.name,
-        granteeName: grantee.name,
-        granteeSpecialty: grantee.specialty,
-        recordTitle: record.title,
-        recordType: record.type,
-        grantedAt: new Date().toLocaleDateString(),
-        unsubscribeUrl: this.buildUnsubscribeUrl(patient),
-        appUrl: this.appUrl,
-      },
+    await this.circuitBreaker.execute('mail', async () => {
+      await this.mailerService.sendMail({
+        to: patient.email,
+        subject,
+        template,
+        context: {
+          patientName: patient.name,
+          granteeName: grantee.name,
+          granteeSpecialty: grantee.specialty,
+          recordTitle: record.title,
+          recordType: record.type,
+          grantedAt: new Date().toLocaleDateString(),
+          unsubscribeUrl: this.buildUnsubscribeUrl(patient),
+          appUrl: this.appUrl,
+        },
+      });
     });
   }
 
@@ -99,6 +105,7 @@ export class MailService {
     patient: Patient,
     revokee: Provider,
     record: MedicalRecord,
+    language: string = 'en'
   ): Promise<void> {
     const subject = `Access Revoked: ${revokee.name} no longer has access to your records`;
 
@@ -107,18 +114,20 @@ export class MailService {
       return;
     }
 
-    await this.mailerService.sendMail({
-      to: patient.email,
-      subject,
-      template: 'access-revoked/access-revoked',
-      context: {
-        patientName: patient.name,
-        granteeName: revokee.name,
-        recordTitle: record.title,
-        revokedAt: new Date().toLocaleDateString(),
-        unsubscribeUrl: this.buildUnsubscribeUrl(patient),
-        appUrl: this.appUrl,
-      },
+    await this.circuitBreaker.execute('mail', async () => {
+      await this.mailerService.sendMail({
+        to: patient.email,
+        subject,
+        template: `access-revoked/access-revoked.${language}`,
+        context: {
+          patientName: patient.name,
+          granteeName: revokee.name,
+          recordTitle: record.title,
+          revokedAt: new Date().toLocaleDateString(),
+          unsubscribeUrl: this.buildUnsubscribeUrl(patient),
+          appUrl: this.appUrl,
+        },
+      });
     });
   }
 
@@ -126,6 +135,7 @@ export class MailService {
     patient: Patient,
     record: MedicalRecord,
     uploadedBy?: Provider,
+    language: string = 'en'
   ): Promise<void> {
     const subject = `New Record Available: ${record.title}`;
 
@@ -134,26 +144,29 @@ export class MailService {
       return;
     }
 
-    await this.mailerService.sendMail({
-      to: patient.email,
-      subject,
-      template: 'record-uploaded/record-uploaded',
-      context: {
-        patientName: patient.name,
-        recordTitle: record.title,
-        recordType: record.type,
-        uploadedBy: uploadedBy?.name ?? 'Your care team',
-        uploadedAt: record.uploadedAt.toLocaleDateString(),
-        viewRecordUrl: `${this.appUrl}/records/${record.id}`,
-        unsubscribeUrl: this.buildUnsubscribeUrl(patient),
-        appUrl: this.appUrl,
-      },
+    await this.circuitBreaker.execute('mail', async () => {
+      await this.mailerService.sendMail({
+        to: patient.email,
+        subject,
+        template: `record-uploaded/record-uploaded.${language}`,
+        context: {
+          patientName: patient.name,
+          recordTitle: record.title,
+          recordType: record.type,
+          uploadedBy: uploadedBy?.name ?? 'Your care team',
+          uploadedAt: record.uploadedAt.toLocaleDateString(),
+          viewRecordUrl: `${this.appUrl}/records/${record.id}`,
+          unsubscribeUrl: this.buildUnsubscribeUrl(patient),
+          appUrl: this.appUrl,
+        },
+      });
     });
   }
 
   async sendSuspiciousAccessEmail(
     patient: Patient,
     event: SuspiciousAccessEvent,
+    language: string = 'en'
   ): Promise<void> {
     const subject = '⚠️ Suspicious Access Detected on Your Health Records';
 
@@ -162,20 +175,22 @@ export class MailService {
       return;
     }
 
-    await this.mailerService.sendMail({
-      to: patient.email,
-      subject,
-      template: 'suspicious-access/suspicious-access',
-      context: {
-        patientName: patient.name,
-        accessorName: event.accessorName,
-        accessedAt: event.accessedAt.toLocaleString(),
-        ipAddress: event.ipAddress,
-        location: event.location ?? 'Unknown',
-        reportUrl: `${this.appUrl}/security/report`,
-        unsubscribeUrl: this.buildUnsubscribeUrl(patient),
-        appUrl: this.appUrl,
-      },
+    await this.circuitBreaker.execute('mail', async () => {
+      await this.mailerService.sendMail({
+        to: patient.email,
+        subject,
+        template: `suspicious-access/suspicious-access.${language}`,
+        context: {
+          patientName: patient.name,
+          accessorName: event.accessorName,
+          accessedAt: event.accessedAt.toLocaleString(),
+          ipAddress: event.ipAddress,
+          location: event.location ?? 'Unknown',
+          reportUrl: `${this.appUrl}/security/report`,
+          unsubscribeUrl: this.buildUnsubscribeUrl(patient),
+          appUrl: this.appUrl,
+        },
+      });
     });
   }
 }

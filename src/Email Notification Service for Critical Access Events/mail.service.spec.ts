@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MailService, Patient, Provider, MedicalRecord } from './mail.service';
 import { MailerService } from '@nestjs-modules/mailer';
 import { ConfigService } from '@nestjs/config';
+import { CircuitBreakerService } from '../common/circuit-breaker/circuit-breaker.service';
 
 const mockPatient: Patient = {
   id: 'patient-1',
@@ -47,6 +48,12 @@ describe('MailService', () => {
               };
               return env[key] ?? defaultVal;
             },
+          },
+        },
+        {
+          provide: CircuitBreakerService,
+          useValue: {
+            execute: jest.fn().mockImplementation((service, fn) => fn()),
           },
         },
       ],
@@ -108,7 +115,9 @@ describe('MailService', () => {
       await service.sendRecordUploadedEmail(mockPatient, mockRecord);
 
       const call = mailerService.sendMail.mock.calls[0][0];
-      expect(call.context.unsubscribeUrl).toMatch(/\/notifications\/unsubscribe\?token=.+&patientId=patient-1/);
+      expect(call.context.unsubscribeUrl).toMatch(
+        /\/notifications\/unsubscribe\?token=.+&patientId=patient-1/,
+      );
     });
 
     it('sends suspicious-access email with high urgency subject', async () => {
